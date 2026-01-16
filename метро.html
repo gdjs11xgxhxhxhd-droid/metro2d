@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Київське Метро: Симулятор 2D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            image-rendering: auto;
+        }
+        .control-panel {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+            padding: 20px;
+            border-radius: 16px;
+            display: flex;
+            gap: 20px;
+            border: 2px solid #444;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+            z-index: 50;
+            pointer-events: auto;
+        }
+        .gauge {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background: radial-gradient(circle, #222 0%, #000 100%);
+        }
+        .btn {
+            padding: 10px 18px;
+            background: #333;
+            border: 1px solid #555;
+            color: #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+            box-shadow: 0 4px 0 #111;
+        }
+        .btn:hover { background: #444; color: white; }
+        .btn:active, .btn.active { background: #2ecc71; border-color: #27ae60; color: white; transform: translateY(2px); box-shadow: 0 2px 0 #111; }
+        .btn.brake:active, .btn.brake.active { background: #e67e22; border-color: #d35400; color: white; }
+        .btn.danger { background: #e74c3c; border-color: #c0392b; color: white; box-shadow: 0 4px 0 #7b1f16; }
+        .btn.danger.active { background: #2ecc71; border-color: #27ae60; box-shadow: 0 4px 0 #1b5e20; }
+        
+        #menu-overlay {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, #1e3a8a 0%, #020617 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+        .selection-step {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+        }
+        .selection-step.active { display: flex; }
+        
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            width: 100%;
+            padding: 20px;
+        }
+
+        .selectable-card {
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .selectable-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="menu-overlay">
+        <h1 class="text-6xl font-black mb-2 italic text-transparent bg-clip-text bg-gradient-to-b from-yellow-400 to-yellow-600 tracking-tighter text-center">KYIV METRO SIM</h1>
+        
+        <div id="step-line" class="selection-step active">
+            <p class="text-blue-200 mb-8 text-sm uppercase tracking-[0.3em]">Оберіть лінію</p>
+            <div class="card-grid">
+                <div onclick="selectLine('m1')" class="selectable-card border-red-500/30">
+                    <div class="text-2xl font-bold text-red-500">М1</div>
+                    <div class="text-[10px] text-white uppercase mt-2 font-medium">Святошинсько-Броварська</div>
+                </div>
+                <div onclick="selectLine('m2')" class="selectable-card border-blue-500/30">
+                    <div class="text-2xl font-bold text-blue-500">М2</div>
+                    <div class="text-[10px] text-white uppercase mt-2 font-medium">Оболонсько-Теремківська</div>
+                </div>
+                <div onclick="selectLine('m3')" class="selectable-card border-green-500/30">
+                    <div class="text-2xl font-bold text-green-500">М3</div>
+                    <div class="text-[10px] text-white uppercase mt-2 font-medium">Сирецько-Печерська</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-dest" class="selection-step">
+            <p id="dest-title" class="text-blue-200 mb-8 text-sm uppercase tracking-[0.3em]">Де ви бажаєте почати поїздку?</p>
+            <div id="dest-container" class="card-grid"></div>
+        </div>
+
+        <div class="mt-12 grid grid-cols-2 gap-x-12 gap-y-2 text-xs text-blue-200/40 font-medium uppercase tracking-widest">
+            <div class="text-right italic">УТРИМУЙТЕ W / ↑ : ТЯГА</div>
+            <div class="text-left italic">УТРИМУЙТЕ S / ↓ : ГАЛЬМА</div>
+            <div class="text-right">ВІДПУСТІТЬ ДЛЯ ВИБІГУ</div>
+            <div class="text-left">SPACE : ДВЕРІ</div>
+            <div class="text-right">L : ФАРИ</div>
+            <div class="text-left">I : ІНФОРМАТОР</div>
+        </div>
+    </div>
+
+    <div id="ui" class="hidden pointer-events-none">
+        <div class="absolute top-10 left-10 bg-zinc-900/90 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl pointer-events-auto min-w-[350px]">
+            <div class="flex items-center gap-4 mb-4">
+                <div id="line-indicator" class="w-3 h-10 bg-red-600 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.5)]"></div>
+                <div>
+                    <div id="station-info" class="text-3xl font-black text-white leading-tight uppercase italic tracking-tighter">---</div>
+                    <div id="line-name" class="text-[10px] font-bold tracking-[0.2em] uppercase">МЕТРОПОЛІТЕН</div>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-4 border-t border-white/5 pt-4">
+                <div>
+                    <div class="text-[9px] text-gray-500 uppercase font-bold tracking-tighter">Швидкість</div>
+                    <div id="speed-text" class="text-lg font-mono text-white italic">0.0 км/год</div>
+                </div>
+                <div>
+                    <div class="text-[9px] text-gray-500 uppercase font-bold tracking-tighter">Пасажири</div>
+                    <div id="passengers-text" class="text-lg font-mono text-emerald-400">0</div>
+                </div>
+                <div>
+                    <div class="text-[9px] text-gray-500 uppercase font-bold tracking-tighter">До наступної</div>
+                    <div id="dist-text" class="text-lg font-mono text-yellow-500 uppercase">---</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="flex flex-col gap-1">
+                <div class="text-[8px] text-center font-black text-gray-500 uppercase italic">Керування</div>
+                <div class="flex gap-2">
+                    <button id="btn-power" class="btn" 
+                        onmousedown="setPower(1)" onmouseup="setPower(0)" 
+                        ontouchstart="setPower(1)" ontouchend="setPower(0)">Хід</button>
+                    <button id="btn-brake" class="btn brake" 
+                        onmousedown="setPower(-1)" onmouseup="setPower(0)"
+                        ontouchstart="setPower(-1)" ontouchend="setPower(0)">Гальма</button>
+                </div>
+            </div>
+            
+            <div class="flex flex-col gap-1">
+                <div class="text-[8px] text-center font-black text-gray-500 uppercase italic">Системи</div>
+                <div class="flex gap-2">
+                    <button id="btn-doors" class="btn danger" onclick="toggleDoors()">Двері</button>
+                    <button id="btn-light" class="btn" onclick="toggleLight()">Світло</button>
+                </div>
+            </div>
+
+            <div class="gauge">
+                <div id="gauge-speed" class="text-3xl font-black leading-none text-white tracking-tighter italic">0</div>
+                <div class="text-[8px] font-bold text-gray-500 uppercase mt-1">км/год</div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const lineData = {
+        m1: {
+            name: "Святошинсько-Броварська",
+            color: "#e53935",
+            stations: ["Академмістечко", "Житомирська", "Святошин", "Нивки", "Берестейська", "Шулявська", "Політехнічний інститут", "Вокзальна", "Університет", "Театральна", "Хрещатик", "Арсенальна", "Дніпро", "Гідропарк", "Лівобережна", "Дарниця", "Чернігівська", "Лісова"]
+        },
+        m2: {
+            name: "Оболонсько-Теремківська",
+            color: "#1e88e5",
+            stations: ["Героїв Дніпра", "Мінська", "Оболонь", "Почайна", "Тараса Шевченка", "Контрактова площа", "Поштова площа", "Майдан Незалежності", "Площа Українських Героїв", "Олімпійська", "Палац Україна", "Либідська", "Деміївська", "Голосіївська", "Васильківська", "Виставковий центр", "Іподром", "Теремки"]
+        },
+        m3: {
+            name: "Сирецько-Печерська",
+            color: "#43a047",
+            stations: ["Сирець", "Дорогожичі", "Лук'янівська", "Золоті ворота", "Палац Спорту", "Кловська", "Печерська", "Звіринецька", "Видубичі", "Славутич", "Осокорки", "Позняки", "Харківська", "Вирлиця", "Бориспільська", "Червоний хутір"]
+        }
+    };
+
+    let gameActive = false;
+    let selectedLineKey = 'm1';
+    let routeStations = [];
+    let worldX = 0;
+    let lightOn = false;
+    let passengers = 0;
+    let doorAnimation = 0; 
+    let targetDoorState = 0;
+    let shakeY = 0;
+
+    const train = {
+        speed: 0,
+        powerState: 0, 
+        width: 1400, 
+        height: 75,
+        maxSpeed: 24.5, 
+        accelConst: 0.012,
+        decelConst: 0.045,  
+        friction: 0.0006    
+    };
+
+    function selectLine(key) {
+        selectedLineKey = key;
+        const line = lineData[key];
+        document.getElementById('step-line').classList.remove('active');
+        document.getElementById('step-dest').classList.add('active');
+        
+        const container = document.getElementById('dest-container');
+        container.innerHTML = '';
+        
+        const startOptions = [
+            { name: line.stations[0], isFirst: true },
+            { name: line.stations[line.stations.length - 1], isFirst: false }
+        ];
+
+        startOptions.forEach(opt => {
+            const card = document.createElement('div');
+            card.className = 'selectable-card';
+            card.style.borderColor = line.color + '44';
+            card.innerHTML = `
+                <div class="text-[10px] text-gray-400 mb-1">ПОЧАТИ НА СТАНЦІЇ:</div>
+                <div class="text-xl font-bold uppercase" style="color:${line.color}">${opt.name}</div>
+                <div class="text-[8px] text-white mt-2">НАПРЯМОК: ${opt.isFirst ? line.stations[line.stations.length-1] : line.stations[0]}</div>
+            `;
+            card.onclick = () => startGameOn(opt.isFirst);
+            container.appendChild(card);
+        });
+    }
+
+    function startGameOn(startAtFirstInList) {
+        const line = lineData[selectedLineKey];
+        let baseStations = [...line.stations];
+        if (!startAtFirstInList) baseStations.reverse();
+        
+        routeStations = baseStations.map((name, i) => ({
+            name: name,
+            x: i * 25000 
+        }));
+
+        worldX = 0; 
+        document.getElementById('menu-overlay').style.opacity = '0';
+        setTimeout(() => {
+            document.getElementById('menu-overlay').style.display = 'none';
+            document.getElementById('ui').classList.remove('hidden');
+        }, 500);
+
+        document.getElementById('line-indicator').style.backgroundColor = line.color;
+        document.getElementById('line-name').style.color = line.color;
+        document.getElementById('line-name').textContent = line.name.toUpperCase();
+        
+        gameActive = true;
+        resize();
+        requestAnimationFrame(update);
+    }
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+
+    window.setPower = function(state) {
+        if(!gameActive) return;
+        if(doorAnimation > 0.1 && state === 1) return; 
+        train.powerState = state;
+        document.getElementById('btn-power').classList.toggle('active', state === 1);
+        document.getElementById('btn-brake').classList.toggle('active', state === -1);
+    };
+
+    window.toggleDoors = function() {
+        if(!gameActive || train.speed > 0.1) return; 
+        targetDoorState = targetDoorState === 0 ? 1 : 0;
+        const btn = document.getElementById('btn-doors');
+        btn.classList.toggle('danger', targetDoorState === 0);
+        btn.classList.toggle('active', targetDoorState === 1);
+    };
+
+    window.toggleLight = function() {
+        lightOn = !lightOn;
+        document.getElementById('btn-light').classList.toggle('active', lightOn);
+    };
+
+    const keysPressed = {};
+    window.addEventListener('keydown', (e) => {
+        if(!gameActive) return;
+        keysPressed[e.code] = true;
+        if(e.code === 'ArrowUp' || e.code === 'KeyW') setPower(1);
+        if(e.code === 'ArrowDown' || e.code === 'KeyS') setPower(-1);
+        if(e.code === 'Space') toggleDoors();
+        if(e.code === 'KeyL') toggleLight();
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if(!gameActive) return;
+        delete keysPressed[e.code];
+        if(!keysPressed['ArrowUp'] && !keysPressed['KeyW'] && !keysPressed['ArrowDown'] && !keysPressed['KeyS']) {
+            setPower(0);
+        } else if (keysPressed['ArrowUp'] || keysPressed['KeyW']) {
+            setPower(1);
+        } else if (keysPressed['ArrowDown'] || keysPressed['KeyS']) {
+            setPower(-1);
+        }
+    });
+
+    function drawTunnel() {
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const centerY = canvas.height / 2;
+        const cameraOffset = canvas.width * 0.75;
+        
+        // Баласт
+        ctx.fillStyle = '#221100';
+        ctx.fillRect(0, centerY + 65, canvas.width, 40); 
+        
+        // Колія
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 4;
+        const railY = centerY + 75;
+        ctx.beginPath();
+        ctx.moveTo(0, railY); ctx.lineTo(canvas.width, railY);
+        ctx.stroke();
+        
+        // Шпали
+        const sleeperSpacing = 80;
+        let startSleeper = -((worldX + cameraOffset) % sleeperSpacing);
+        ctx.strokeStyle = '#150a00';
+        ctx.lineWidth = 14;
+        for(let x = startSleeper; x < canvas.width; x += sleeperSpacing) {
+            ctx.beginPath(); ctx.moveTo(x, railY); ctx.lineTo(x, railY + 15); ctx.stroke();
+        }
+    }
+
+    function drawStation(s) {
+        const cameraOffset = canvas.width * 0.75;
+        const screenX = s.x - worldX + cameraOffset;
+        if(screenX < -5000 || screenX > canvas.width + 100) return;
+        const centerY = canvas.height / 2;
+        
+        // Платформа
+        ctx.fillStyle = '#111';
+        ctx.fillRect(screenX, centerY - 320, 5000, 395);
+        
+        // Смуга лінії
+        ctx.fillStyle = lineData[selectedLineKey].color;
+        ctx.fillRect(screenX, centerY - 110, 5000, 35);
+        
+        // Назва станції
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 54px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.shadowBlur = 10; ctx.shadowColor = 'black';
+        ctx.fillText(s.name.toUpperCase(), screenX + 300, centerY - 65);
+        ctx.shadowBlur = 0;
+        
+        // Освітлення станції (стеля)
+        ctx.fillStyle = 'rgba(255,255,200,0.1)';
+        ctx.fillRect(screenX, centerY - 320, 5000, 10);
+    }
+
+    function drawTrain() {
+        if(train.speed > 0.1) {
+            shakeY = Math.sin(Date.now() * 0.02) * (train.speed * 0.12);
+        } else {
+            shakeY = 0;
+        }
+
+        const centerY = canvas.height / 2 - 25 + shakeY;
+        const headX = canvas.width * 0.75;
+        const x = headX - train.width; 
+        const mainColor = '#004daa'; 
+        const stripeColor = '#ffffff';
+
+        const wagonCount = 5;
+        const wagonW = (train.width - 20) / wagonCount;
+
+        for(let w = 0; w < wagonCount; w++) {
+            const startW = x + (w * (wagonW + 4));
+            
+            // 1. ПІДВАГОНКА
+            ctx.fillStyle = '#111';
+            ctx.fillRect(startW + 20, centerY + train.height, 40, 10);
+            ctx.fillRect(startW + wagonW - 60, centerY + train.height, 40, 10);
+            
+            // 2. КУЗОВ
+            ctx.fillStyle = mainColor;
+            ctx.fillRect(startW, centerY, wagonW, train.height);
+            
+            // Торцеве з'єднання
+            if(w < wagonCount - 1) {
+                ctx.fillStyle = '#050505';
+                ctx.fillRect(startW + wagonW, centerY + 5, 4, train.height - 10);
+            }
+
+            // 3. ДЕТАЛІ КУЗОВА (Гофри)
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            for(let i = 0; i < 3; i++) {
+                ctx.fillRect(startW, centerY + 50 + (i * 6), wagonW, 2);
+            }
+            
+            // Біла смуга
+            ctx.fillStyle = stripeColor;
+            ctx.fillRect(startW, centerY + 44, wagonW, 4);
+
+            // 4. ВІКНА ВАГОНА
+            const winW = wagonW * 0.18;
+            const winH = 32;
+            const winX = startW + (wagonW * 0.5) - (winW / 2);
+            
+            // Рамка вікна
+            ctx.fillStyle = '#080808';
+            ctx.fillRect(winX - 2, centerY + 8, winW + 4, winH + 4);
+            // Скло
+            ctx.fillStyle = 'rgba(20, 40, 60, 1)';
+            ctx.fillRect(winX, centerY + 10, winW, winH);
+            // Блік
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.beginPath();
+            ctx.moveTo(winX, centerY+10); ctx.lineTo(winX+15, centerY+10); ctx.lineTo(winX, centerY+25); ctx.fill();
+
+            // 5. ДВЕРІ
+            const doorPosArr = [0.28, 0.72];
+            doorPosArr.forEach(pos => {
+                const doorCenter = startW + wagonW * pos;
+                const dW = 50; 
+                const dH = 68;
+                const slide = (dW / 2) * doorAnimation;
+                const dX = doorCenter - dW/2;
+
+                // Дверний отвір
+                ctx.fillStyle = '#050505';
+                ctx.fillRect(dX, centerY + 5, dW, dH);
+
+                const drawLeaf = (leafX) => {
+                    ctx.fillStyle = mainColor;
+                    ctx.fillRect(leafX, centerY + 5, dW/2, dH);
+                    
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(leafX, centerY + 5, dW/2, dH);
+                    
+                    // Вікно в двері
+                    const dwWinW = dW/2 - 8;
+                    const dwWinH = 28;
+                    ctx.fillStyle = '#0a1a2a';
+                    ctx.fillRect(leafX + 4, centerY + 10, dwWinW, dwWinH);
+                    
+                    // Вертикальна планка
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(leafX + dW/4 - 0.5, centerY + 10, 1, dwWinH);
+                };
+
+                drawLeaf(dX - slide); // Ліва
+                drawLeaf(dX + dW/2 + slide); // Права
+            });
+            
+            // Кабіна машиніста (БЕЗ бічних дверей/вікон з правого боку)
+            if(w === wagonCount - 1) {
+                // Глуха маска кабіни - суцільний синій колір
+                ctx.fillStyle = mainColor;
+                ctx.fillRect(headX - 10, centerY, 10, train.height);
+                
+                // Декоративні білі лінії маски (залишаємо для впізнаваності стилю 81-717)
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(headX - 5, centerY + 5);
+                ctx.lineTo(headX - 5, centerY + train.height - 5);
+                ctx.stroke();
+            }
+        }
+
+        // 6. ФАРИ
+        if(lightOn) {
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 20; ctx.shadowColor = 'white';
+            ctx.fillRect(headX - 4, centerY + 52, 4, 3);
+            ctx.fillRect(headX - 4, centerY + 60, 4, 3);
+            
+            ctx.shadowBlur = 0;
+            const beam = ctx.createLinearGradient(headX, centerY + 58, headX + 800, centerY + 58);
+            beam.addColorStop(0, 'rgba(255,255,255,0.4)');
+            beam.addColorStop(0.4, 'rgba(255,255,255,0.1)');
+            beam.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = beam;
+            ctx.beginPath(); ctx.moveTo(headX, centerY+40); ctx.lineTo(headX+800, centerY-180); ctx.lineTo(headX+800, centerY+380); ctx.lineTo(headX, centerY+75); ctx.fill();
+        }
+    }
+
+    function update() {
+        if(!gameActive) return;
+        
+        if (doorAnimation < targetDoorState) doorAnimation = Math.min(targetDoorState, doorAnimation + 0.025);
+        if (doorAnimation > targetDoorState) doorAnimation = Math.max(targetDoorState, doorAnimation - 0.025);
+
+        if(train.powerState === 1 && doorAnimation < 0.1) {
+            train.speed += train.accelConst;
+        } else if(train.powerState === -1) {
+            train.speed -= train.decelConst;
+        } else {
+            if (train.speed > 0) train.speed -= train.friction;
+        }
+
+        train.speed *= 0.9999;
+        if(train.speed < 0.001) train.speed = 0;
+        if(train.speed > train.maxSpeed) train.speed = train.maxSpeed;
+        
+        if(doorAnimation > 0.01 && train.speed > 0.5) train.speed -= 0.2;
+
+        worldX += train.speed;
+        
+        let stationName = "ПЕРЕГІН";
+        let atStation = false;
+        routeStations.forEach(s => {
+            if(worldX >= s.x - 500 && worldX <= s.x + 4500) {
+                stationName = s.name;
+                atStation = true;
+                if(doorAnimation > 0.9 && train.speed < 0.1 && passengers < 500) passengers += Math.floor(Math.random()*4);
+            }
+        });
+        
+        if(passengers > 0 && Math.random() < 0.01) {
+            if(atStation && doorAnimation > 0.9) passengers -= Math.floor(Math.random()*6);
+        }
+
+        let nextS = routeStations.find(s => s.x > worldX + 100);
+        let distText = nextS ? Math.floor((nextS.x - worldX)/10) + " м" : "КІНЦЕВА";
+        
+        ctx.clearRect(0,0, canvas.width, canvas.height);
+        drawTunnel();
+        routeStations.forEach(drawStation);
+        drawTrain();
+        
+        document.getElementById('speed-text').textContent = (train.speed * 3.6).toFixed(1) + " км/год";
+        document.getElementById('gauge-speed').textContent = Math.floor(train.speed * 3.6);
+        document.getElementById('passengers-text').textContent = Math.floor(passengers);
+        document.getElementById('dist-text').textContent = distText;
+        document.getElementById('station-info').textContent = stationName;
+        
+        requestAnimationFrame(update);
+    }
+</script>
+</body>
+</html>
