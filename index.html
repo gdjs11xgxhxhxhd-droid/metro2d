@@ -479,7 +479,6 @@
                 drawLeaf(dX + dW/2 + slide);
             });
             
-            // ПЕРЕДНЯ ЧАСТИНА (КАБІНА)
             if(w === wagonCount - 1) {
                 ctx.fillStyle = mainColor;
                 ctx.fillRect(headX - 12, centerY, 12, train.height);
@@ -530,6 +529,7 @@
             }
         });
         
+        // Обычная логика выхода пассажиров на станциях
         if(passengers > 0 && Math.random() < 0.01) {
             if(atStation && doorAnimation > 0.9) passengers -= Math.floor(Math.random()*6);
         }
