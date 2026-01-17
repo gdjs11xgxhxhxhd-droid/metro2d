@@ -56,10 +56,12 @@
             text-transform: uppercase;
             font-size: 11px;
             box-shadow: 0 4px 0 #111;
+            min-width: 70px;
         }
         .btn:hover { background: #444; color: white; }
         .btn:active, .btn.active { background: #2ecc71; border-color: #27ae60; color: white; transform: translateY(2px); box-shadow: 0 2px 0 #111; }
         .btn.brake:active, .btn.brake.active { background: #e67e22; border-color: #d35400; color: white; }
+        .btn.reverse:active, .btn.reverse.active { background: #9b59b6; border-color: #8e44ad; color: white; }
         .btn.danger { background: #e74c3c; border-color: #c0392b; color: white; box-shadow: 0 4px 0 #7b1f16; }
         .btn.danger.active { background: #2ecc71; border-color: #27ae60; box-shadow: 0 4px 0 #1b5e20; }
         
@@ -137,12 +139,12 @@
         </div>
 
         <div class="mt-12 grid grid-cols-2 gap-x-12 gap-y-2 text-xs text-blue-200/40 font-medium uppercase tracking-widest">
-            <div class="text-right italic">УТРИМУЙТЕ W / ↑ : ТЯГА</div>
-            <div class="text-left italic">УТРИМУЙТЕ S / ↓ : ГАЛЬМА</div>
-            <div class="text-right">ВІДПУСТІТЬ ДЛЯ ВИБІГУ</div>
-            <div class="text-left">SPACE : ДВЕРІ</div>
-            <div class="text-right">L : ФАРИ</div>
-            <div class="text-left">I : ІНФОРМАТОР</div>
+            <div class="text-right italic">W : Вперед</div>
+            <div class="text-left italic">A : Назад</div>
+            <div class="text-right italic">S : Гальма</div>
+            <div class="text-left italic">D : Двері</div>
+            <div class="text-right">I : Інформатор</div>
+            <div class="text-left">ESC : Меню</div>
         </div>
     </div>
 
@@ -173,22 +175,24 @@
 
         <div class="control-panel">
             <div class="flex flex-col gap-1">
-                <div class="text-[8px] text-center font-black text-gray-500 uppercase italic">Керування</div>
+                <div class="text-[8px] text-center font-black text-gray-500 uppercase italic">Тяга</div>
                 <div class="flex gap-2">
-                    <button id="btn-power" class="btn" 
+                    <button id="btn-forward" class="btn" 
                         onmousedown="setPower(1)" onmouseup="setPower(0)" 
-                        ontouchstart="setPower(1)" ontouchend="setPower(0)">Хід</button>
+                        ontouchstart="setPower(1)" ontouchend="setPower(0)">Вперед (W)</button>
                     <button id="btn-brake" class="btn brake" 
                         onmousedown="setPower(-1)" onmouseup="setPower(0)"
-                        ontouchstart="setPower(-1)" ontouchend="setPower(0)">Гальма</button>
+                        ontouchstart="setPower(-1)" ontouchend="setPower(0)">Гальма (S)</button>
+                    <button id="btn-reverse" class="btn reverse" 
+                        onmousedown="setPower(2)" onmouseup="setPower(0)" 
+                        ontouchstart="setPower(2)" ontouchend="setPower(0)">Назад (A)</button>
                 </div>
             </div>
             
             <div class="flex flex-col gap-1">
                 <div class="text-[8px] text-center font-black text-gray-500 uppercase italic">Системи</div>
                 <div class="flex gap-2">
-                    <button id="btn-doors" class="btn danger" onclick="toggleDoors()">Двері</button>
-                    <button id="btn-light" class="btn" onclick="toggleLight()">Світло</button>
+                    <button id="btn-doors" class="btn danger" onclick="toggleDoors()">Двері (D)</button>
                 </div>
             </div>
 
@@ -227,7 +231,6 @@
     let selectedLineKey = 'm1';
     let routeStations = [];
     let worldX = 0;
-    let lightOn = false;
     let passengers = 0;
     let doorAnimation = 0; 
     let targetDoorState = 0;
@@ -239,10 +242,13 @@
         width: 1400, 
         height: 75,
         maxSpeed: 24.5, 
+        maxReverseSpeed: -10, 
         accelConst: 0.012,
         decelConst: 0.045,  
         friction: 0.0006    
     };
+
+    const STATION_LENGTH = 6000; 
 
     function selectLine(key) {
         selectedLineKey = key;
@@ -306,43 +312,42 @@
 
     window.setPower = function(state) {
         if(!gameActive) return;
-        if(doorAnimation > 0.1 && state === 1) return; 
         train.powerState = state;
-        document.getElementById('btn-power').classList.toggle('active', state === 1);
+        document.getElementById('btn-forward').classList.toggle('active', state === 1);
+        document.getElementById('btn-reverse').classList.toggle('active', state === 2);
         document.getElementById('btn-brake').classList.toggle('active', state === -1);
     };
 
     window.toggleDoors = function() {
-        if(!gameActive || train.speed > 0.1) return; 
+        if(!gameActive) return;
         targetDoorState = targetDoorState === 0 ? 1 : 0;
         const btn = document.getElementById('btn-doors');
         btn.classList.toggle('danger', targetDoorState === 0);
         btn.classList.toggle('active', targetDoorState === 1);
     };
 
-    window.toggleLight = function() {
-        lightOn = !lightOn;
-        document.getElementById('btn-light').classList.toggle('active', lightOn);
-    };
-
     const keysPressed = {};
     window.addEventListener('keydown', (e) => {
         if(!gameActive) return;
         keysPressed[e.code] = true;
-        if(e.code === 'ArrowUp' || e.code === 'KeyW') setPower(1);
-        if(e.code === 'ArrowDown' || e.code === 'KeyS') setPower(-1);
-        if(e.code === 'Space') toggleDoors();
-        if(e.code === 'KeyL') toggleLight();
+        
+        if(e.code === 'KeyW') setPower(1);
+        if(e.code === 'KeyA') setPower(2);
+        if(e.code === 'KeyS') setPower(-1);
+        if(e.code === 'KeyD') toggleDoors();
     });
 
     window.addEventListener('keyup', (e) => {
         if(!gameActive) return;
         delete keysPressed[e.code];
-        if(!keysPressed['ArrowUp'] && !keysPressed['KeyW'] && !keysPressed['ArrowDown'] && !keysPressed['KeyS']) {
+        
+        if (!keysPressed['KeyW'] && !keysPressed['KeyA'] && !keysPressed['KeyS']) {
             setPower(0);
-        } else if (keysPressed['ArrowUp'] || keysPressed['KeyW']) {
+        } else if (keysPressed['KeyW']) {
             setPower(1);
-        } else if (keysPressed['ArrowDown'] || keysPressed['KeyS']) {
+        } else if (keysPressed['KeyA']) {
+            setPower(2);
+        } else if (keysPressed['KeyS']) {
             setPower(-1);
         }
     });
@@ -353,22 +358,19 @@
         const centerY = canvas.height / 2;
         const cameraOffset = canvas.width * 0.75;
         
-        // Баласт
-        ctx.fillStyle = '#221100';
+        ctx.fillStyle = '#1a120b';
         ctx.fillRect(0, centerY + 65, canvas.width, 40); 
         
-        // Колія
-        ctx.strokeStyle = '#1a1a1a';
+        ctx.strokeStyle = '#151515';
         ctx.lineWidth = 4;
         const railY = centerY + 75;
         ctx.beginPath();
         ctx.moveTo(0, railY); ctx.lineTo(canvas.width, railY);
         ctx.stroke();
         
-        // Шпали
         const sleeperSpacing = 80;
         let startSleeper = -((worldX + cameraOffset) % sleeperSpacing);
-        ctx.strokeStyle = '#150a00';
+        ctx.strokeStyle = '#101010';
         ctx.lineWidth = 14;
         for(let x = startSleeper; x < canvas.width; x += sleeperSpacing) {
             ctx.beginPath(); ctx.moveTo(x, railY); ctx.lineTo(x, railY + 15); ctx.stroke();
@@ -378,33 +380,32 @@
     function drawStation(s) {
         const cameraOffset = canvas.width * 0.75;
         const screenX = s.x - worldX + cameraOffset;
-        if(screenX < -5000 || screenX > canvas.width + 100) return;
+        if(screenX < -STATION_LENGTH || screenX > canvas.width + 100) return;
         const centerY = canvas.height / 2;
         
-        // Платформа
         ctx.fillStyle = '#111';
-        ctx.fillRect(screenX, centerY - 320, 5000, 395);
+        ctx.fillRect(screenX, centerY - 320, STATION_LENGTH, 395);
         
-        // Смуга лінії
         ctx.fillStyle = lineData[selectedLineKey].color;
-        ctx.fillRect(screenX, centerY - 110, 5000, 35);
+        ctx.fillRect(screenX, centerY - 110, STATION_LENGTH, 35);
         
-        // Назва станції
         ctx.fillStyle = 'white';
-        ctx.font = 'bold 54px sans-serif';
-        ctx.textAlign = 'left';
+        ctx.font = 'bold 70px sans-serif'; 
+        ctx.textAlign = 'center';
         ctx.shadowBlur = 10; ctx.shadowColor = 'black';
-        ctx.fillText(s.name.toUpperCase(), screenX + 300, centerY - 65);
+        
+        ctx.fillText(s.name.toUpperCase(), screenX + STATION_LENGTH / 2, centerY - 65);
+        
         ctx.shadowBlur = 0;
         
-        // Освітлення станції (стеля)
         ctx.fillStyle = 'rgba(255,255,200,0.1)';
-        ctx.fillRect(screenX, centerY - 320, 5000, 10);
+        ctx.fillRect(screenX, centerY - 320, STATION_LENGTH, 10);
     }
 
     function drawTrain() {
-        if(train.speed > 0.1) {
-            shakeY = Math.sin(Date.now() * 0.02) * (train.speed * 0.12);
+        const absSpeed = Math.abs(train.speed);
+        if(absSpeed > 0.1) {
+            shakeY = Math.sin(Date.now() * 0.02) * (absSpeed * 0.05);
         } else {
             shakeY = 0;
         }
@@ -421,48 +422,35 @@
         for(let w = 0; w < wagonCount; w++) {
             const startW = x + (w * (wagonW + 4));
             
-            // 1. ПІДВАГОНКА
             ctx.fillStyle = '#111';
             ctx.fillRect(startW + 20, centerY + train.height, 40, 10);
             ctx.fillRect(startW + wagonW - 60, centerY + train.height, 40, 10);
             
-            // 2. КУЗОВ
             ctx.fillStyle = mainColor;
             ctx.fillRect(startW, centerY, wagonW, train.height);
             
-            // Торцеве з'єднання
             if(w < wagonCount - 1) {
                 ctx.fillStyle = '#050505';
                 ctx.fillRect(startW + wagonW, centerY + 5, 4, train.height - 10);
             }
 
-            // 3. ДЕТАЛІ КУЗОВА (Гофри)
             ctx.fillStyle = 'rgba(0,0,0,0.15)';
             for(let i = 0; i < 3; i++) {
                 ctx.fillRect(startW, centerY + 50 + (i * 6), wagonW, 2);
             }
             
-            // Біла смуга
             ctx.fillStyle = stripeColor;
             ctx.fillRect(startW, centerY + 44, wagonW, 4);
 
-            // 4. ВІКНА ВАГОНА
             const winW = wagonW * 0.18;
             const winH = 32;
             const winX = startW + (wagonW * 0.5) - (winW / 2);
             
-            // Рамка вікна
             ctx.fillStyle = '#080808';
             ctx.fillRect(winX - 2, centerY + 8, winW + 4, winH + 4);
-            // Скло
             ctx.fillStyle = 'rgba(20, 40, 60, 1)';
             ctx.fillRect(winX, centerY + 10, winW, winH);
-            // Блік
-            ctx.fillStyle = 'rgba(255,255,255,0.08)';
-            ctx.beginPath();
-            ctx.moveTo(winX, centerY+10); ctx.lineTo(winX+15, centerY+10); ctx.lineTo(winX, centerY+25); ctx.fill();
 
-            // 5. ДВЕРІ
             const doorPosArr = [0.28, 0.72];
             doorPosArr.forEach(pos => {
                 const doorCenter = startW + wagonW * pos;
@@ -471,63 +459,37 @@
                 const slide = (dW / 2) * doorAnimation;
                 const dX = doorCenter - dW/2;
 
-                // Дверний отвір
                 ctx.fillStyle = '#050505';
                 ctx.fillRect(dX, centerY + 5, dW, dH);
 
                 const drawLeaf = (leafX) => {
                     ctx.fillStyle = mainColor;
                     ctx.fillRect(leafX, centerY + 5, dW/2, dH);
-                    
                     ctx.strokeStyle = '#000';
                     ctx.lineWidth = 1;
                     ctx.strokeRect(leafX, centerY + 5, dW/2, dH);
                     
-                    // Вікно в двері
                     const dwWinW = dW/2 - 8;
                     const dwWinH = 28;
                     ctx.fillStyle = '#0a1a2a';
                     ctx.fillRect(leafX + 4, centerY + 10, dwWinW, dwWinH);
-                    
-                    // Вертикальна планка
-                    ctx.fillStyle = '#000';
-                    ctx.fillRect(leafX + dW/4 - 0.5, centerY + 10, 1, dwWinH);
                 };
 
-                drawLeaf(dX - slide); // Ліва
-                drawLeaf(dX + dW/2 + slide); // Права
+                drawLeaf(dX - slide);
+                drawLeaf(dX + dW/2 + slide);
             });
             
-            // Кабіна машиніста (БЕЗ бічних дверей/вікон з правого боку)
+            // ПЕРЕДНЯ ЧАСТИНА (КАБІНА)
             if(w === wagonCount - 1) {
-                // Глуха маска кабіни - суцільний синій колір
                 ctx.fillStyle = mainColor;
-                ctx.fillRect(headX - 10, centerY, 10, train.height);
+                ctx.fillRect(headX - 12, centerY, 12, train.height);
                 
-                // Декоративні білі лінії маски (залишаємо для впізнаваності стилю 81-717)
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                ctx.moveTo(headX - 5, centerY + 5);
-                ctx.lineTo(headX - 5, centerY + train.height - 5);
-                ctx.stroke();
+                ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                ctx.fillRect(headX - 3, centerY, 3, train.height);
+                
+                ctx.fillStyle = '#080808';
+                ctx.fillRect(headX - 8, centerY + 8, 6, 32);
             }
-        }
-
-        // 6. ФАРИ
-        if(lightOn) {
-            ctx.fillStyle = '#fff';
-            ctx.shadowBlur = 20; ctx.shadowColor = 'white';
-            ctx.fillRect(headX - 4, centerY + 52, 4, 3);
-            ctx.fillRect(headX - 4, centerY + 60, 4, 3);
-            
-            ctx.shadowBlur = 0;
-            const beam = ctx.createLinearGradient(headX, centerY + 58, headX + 800, centerY + 58);
-            beam.addColorStop(0, 'rgba(255,255,255,0.4)');
-            beam.addColorStop(0.4, 'rgba(255,255,255,0.1)');
-            beam.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = beam;
-            ctx.beginPath(); ctx.moveTo(headX, centerY+40); ctx.lineTo(headX+800, centerY-180); ctx.lineTo(headX+800, centerY+380); ctx.lineTo(headX, centerY+75); ctx.fill();
         }
     }
 
@@ -537,29 +499,34 @@
         if (doorAnimation < targetDoorState) doorAnimation = Math.min(targetDoorState, doorAnimation + 0.025);
         if (doorAnimation > targetDoorState) doorAnimation = Math.max(targetDoorState, doorAnimation - 0.025);
 
-        if(train.powerState === 1 && doorAnimation < 0.1) {
+        if(train.powerState === 1) { 
             train.speed += train.accelConst;
-        } else if(train.powerState === -1) {
-            train.speed -= train.decelConst;
-        } else {
-            if (train.speed > 0) train.speed -= train.friction;
+        } else if(train.powerState === 2) { 
+            train.speed -= train.accelConst;
+        } else if(train.powerState === -1) { 
+            if (train.speed > 0) train.speed = Math.max(0, train.speed - train.decelConst);
+            else if (train.speed < 0) train.speed = Math.min(0, train.speed + train.decelConst);
+        } else { 
+            if (train.speed > 0) train.speed = Math.max(0, train.speed - train.friction);
+            else if (train.speed < 0) train.speed = Math.min(0, train.speed + train.friction);
         }
 
-        train.speed *= 0.9999;
-        if(train.speed < 0.001) train.speed = 0;
         if(train.speed > train.maxSpeed) train.speed = train.maxSpeed;
+        if(train.speed < train.maxReverseSpeed) train.speed = train.maxReverseSpeed;
         
-        if(doorAnimation > 0.01 && train.speed > 0.5) train.speed -= 0.2;
-
         worldX += train.speed;
         
         let stationName = "ПЕРЕГІН";
         let atStation = false;
+        
         routeStations.forEach(s => {
-            if(worldX >= s.x - 500 && worldX <= s.x + 4500) {
+            if(worldX >= s.x - 500 && worldX <= s.x + STATION_LENGTH + 500) {
                 stationName = s.name;
                 atStation = true;
-                if(doorAnimation > 0.9 && train.speed < 0.1 && passengers < 500) passengers += Math.floor(Math.random()*4);
+                
+                if(doorAnimation > 0.9 && Math.abs(train.speed) < 0.2 && passengers < 500) {
+                    passengers += Math.floor(Math.random()*4);
+                }
             }
         });
         
@@ -567,8 +534,14 @@
             if(atStation && doorAnimation > 0.9) passengers -= Math.floor(Math.random()*6);
         }
 
-        let nextS = routeStations.find(s => s.x > worldX + 100);
-        let distText = nextS ? Math.floor((nextS.x - worldX)/10) + " м" : "КІНЦЕВА";
+        let distText = "КІНЦЕВА";
+        if (train.speed >= 0) {
+             let nextS = routeStations.find(s => s.x > worldX + 100);
+             if (nextS) distText = Math.floor((nextS.x - worldX)/10) + " м";
+        } else {
+             let prevS = [...routeStations].reverse().find(s => s.x < worldX - 100);
+             if (prevS) distText = Math.floor((worldX - prevS.x)/10) + " м";
+        }
         
         ctx.clearRect(0,0, canvas.width, canvas.height);
         drawTunnel();
@@ -576,7 +549,7 @@
         drawTrain();
         
         document.getElementById('speed-text').textContent = (train.speed * 3.6).toFixed(1) + " км/год";
-        document.getElementById('gauge-speed').textContent = Math.floor(train.speed * 3.6);
+        document.getElementById('gauge-speed').textContent = Math.abs(Math.floor(train.speed * 3.6));
         document.getElementById('passengers-text').textContent = Math.floor(passengers);
         document.getElementById('dist-text').textContent = distText;
         document.getElementById('station-info').textContent = stationName;
